@@ -53,6 +53,8 @@ fun NTag21XScreen(
     val textToWrite by viewModel.textToWrite.collectAsState()
     val passwordProtectionMode by viewModel.passwordProtectionMode.collectAsState()
     val password by viewModel.password.collectAsState()
+    val statusMessage by viewModel.statusMessage.collectAsState()
+    val isProcessing by viewModel.isProcessing.collectAsState()
 
     val scrollState = rememberScrollState()
 
@@ -85,6 +87,38 @@ fun NTag21XScreen(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+        
+        // Status Message
+        if (statusMessage.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = if (statusMessage.startsWith("Error:")) {
+                            Color(0xFFFFEBEE) // Light red
+                        } else if (statusMessage.startsWith("Success:")) {
+                            Color(0xFFE8F5E9) // Light green
+                        } else {
+                            Color(0xFFE3F2FD) // Light blue
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .padding(12.dp)
+            ) {
+                Text(
+                    text = statusMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (statusMessage.startsWith("Error:")) {
+                        Color(0xFFC62828) // Dark red
+                    } else if (statusMessage.startsWith("Success:")) {
+                        Color(0xFF2E7D32) // Dark green
+                    } else {
+                        Color(0xFF1976D2) // Dark blue
+                    }
+                )
+            }
+        }
+        
         // Read Result Section
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -110,12 +144,14 @@ fun NTag21XScreen(
                     unfocusedContainerColor = Color(0xFFF5F5F5), // Light gray
                     focusedContainerColor = Color(0xFFF5F5F5)
                 ),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                maxLines = 5
             )
             
             Button(
                 onClick = { viewModel.readNfcTag() },
                 modifier = Modifier.fillMaxWidth(),
+                enabled = !isProcessing,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF2196F3) // Blue
                 ),
@@ -155,6 +191,7 @@ fun NTag21XScreen(
             Button(
                 onClick = { viewModel.writeNfcTag() },
                 modifier = Modifier.fillMaxWidth(),
+                enabled = !isProcessing,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF4CAF50) // Green
                 ),
@@ -250,9 +287,24 @@ fun NTag21XScreen(
                 }
             }
             
-            Button(
-                onClick = { /* Set password dialog */ },
+            // Password input field
+            OutlinedTextField(
+                value = password,
+                onValueChange = { viewModel.updatePassword(it) },
                 modifier = Modifier.fillMaxWidth(),
+                label = { Text("Password (4 digits or 8 hex chars)") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true
+            )
+            
+            Button(
+                onClick = { viewModel.setPassword() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isProcessing,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFFF9800) // Orange
                 ),
@@ -264,7 +316,7 @@ fun NTag21XScreen(
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Set Password ($password)")
+                Text("Set Password")
             }
         }
 
@@ -272,6 +324,7 @@ fun NTag21XScreen(
         Button(
             onClick = { viewModel.readTagInformation() },
             modifier = Modifier.fillMaxWidth(),
+            enabled = !isProcessing,
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFF9C27B0) // Purple
             ),

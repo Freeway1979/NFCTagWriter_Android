@@ -61,6 +61,16 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     
+    // NFC
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
+    
+    // NTAG424 Java Library - Add the JAR file to app/libs/ directory
+    // Download from: https://github.com/johnnyb/ntag424-java
+    // After building with 'mvn clean install', copy target/ntag424-VERSION.jar to app/libs/
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
+    // To add a specific AAR or JAR file
+    // implementation(files("libs/your-library-name.aar"))
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

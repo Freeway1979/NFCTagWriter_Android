@@ -4,7 +4,7 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     
-    <!-- NFC Tag Card (Rounded Rectangle) -->
+    <!-- NFC Tag Card (Monochrome version for themed icons) -->
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M22,30 L86,30 Q94,30 94,38 L94,70 Q94,78 86,78 L22,78 Q14,78 14,70 L14,38 Q14,30 22,30 Z" />
@@ -14,53 +14,50 @@
         android:fillColor="#00000000"
         android:pathData="M22,30 L86,30 Q94,30 94,38 L94,70 Q94,78 86,78 L22,78 Q14,78 14,70 L14,38 Q14,30 22,30 Z"
         android:strokeWidth="3"
-        android:strokeColor="#1976D2" />
+        android:strokeColor="#FFFFFF" />
     
-    <!-- NFC Chip/IC (Orange) -->
-    <path
-        android:fillColor="#FF9800"
-        android:pathData="M38,48 L70,48 L70,60 L38,60 Z" />
+    <!-- NFC Chip/IC -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M40,50 L68,50 L68,58 L40,58 Z" />
+        android:pathData="M38,48 L70,48 L70,60 L38,60 Z" />
     
     <!-- NFC Antenna Lines -->
     <path
-        android:fillColor="#1976D2"
+        android:fillColor="#FFFFFF"
         android:pathData="M38,66 L70,66"
         android:strokeWidth="2"
-        android:strokeColor="#1976D2" />
+        android:strokeColor="#FFFFFF" />
     <path
-        android:fillColor="#1976D2"
+        android:fillColor="#FFFFFF"
         android:pathData="M38,70 L70,70"
         android:strokeWidth="2"
-        android:strokeColor="#1976D2" />
+        android:strokeColor="#FFFFFF" />
     
-    <!-- Radio Waves (Left) - Representing NFC Communication -->
+    <!-- Radio Waves (Left) -->
     <path
-        android:fillColor="#4CAF50"
+        android:fillColor="#FFFFFF"
         android:fillAlpha="0.8"
         android:pathData="M6,54 Q6,48 12,48 Q18,48 18,54 Q18,60 12,60 Q6,60 6,54 Z" />
     <path
-        android:fillColor="#4CAF50"
+        android:fillColor="#FFFFFF"
         android:fillAlpha="0.6"
         android:pathData="M6,54 Q6,44 16,44 Q26,44 26,54 Q26,64 16,64 Q6,64 6,54 Z" />
     <path
-        android:fillColor="#4CAF50"
+        android:fillColor="#FFFFFF"
         android:fillAlpha="0.4"
         android:pathData="M6,54 Q6,40 20,40 Q34,40 34,54 Q34,68 20,68 Q6,68 6,54 Z" />
     
     <!-- Radio Waves (Right) -->
     <path
-        android:fillColor="#4CAF50"
+        android:fillColor="#FFFFFF"
         android:fillAlpha="0.8"
         android:pathData="M90,54 Q90,48 96,48 Q102,48 102,54 Q102,60 96,60 Q90,60 90,54 Z" />
     <path
-        android:fillColor="#4CAF50"
+        android:fillColor="#FFFFFF"
         android:fillAlpha="0.6"
         android:pathData="M90,54 Q90,44 100,44 Q110,44 110,54 Q110,64 100,64 Q90,64 90,54 Z" />
     <path
-        android:fillColor="#4CAF50"
+        android:fillColor="#FFFFFF"
         android:fillAlpha="0.4"
         android:pathData="M90,54 Q90,40 104,40 Q118,40 118,54 Q118,68 104,68 Q90,68 90,54 Z" />
     
