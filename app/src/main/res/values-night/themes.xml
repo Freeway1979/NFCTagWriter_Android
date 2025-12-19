@@ -1,0 +1,10 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme for Compose (Night mode). -->
+    <!-- Since we're using Compose, this theme is minimal and mainly for system UI. -->
+    <style name="Theme.NFCTagWriter" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Customize your theme here. -->
+    </style>
+</resources>
