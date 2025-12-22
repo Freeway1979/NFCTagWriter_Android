@@ -29,10 +29,33 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Intent filter for NDEF_DISCOVERED with HTTP URLs -->
             <intent-filter>
                 <action android:name="android.nfc.action.NDEF_DISCOVERED" />
                 <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="http" />
             </intent-filter>
+            <!-- Intent filter for NDEF_DISCOVERED with HTTPS URLs -->
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="https" />
+            </intent-filter>
+            <!-- Intent filter for ACTION_VIEW with Firewalla URLs (when Android converts NFC URL to ACTION_VIEW) -->
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="mesh.firewalla.net" android:pathPrefix="/nfc" />
+            </intent-filter>
+            <!-- Intent filter for ACTION_VIEW with HTTP Firewalla URLs -->
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" android:host="mesh.firewalla.net" android:pathPrefix="/nfc" />
+            </intent-filter>
+            <!-- Intent filter for TAG_DISCOVERED (fallback for tags without NDEF) -->
             <intent-filter>
                 <action android:name="android.nfc.action.TAG_DISCOVERED" />
                 <category android:name="android.intent.category.DEFAULT" />

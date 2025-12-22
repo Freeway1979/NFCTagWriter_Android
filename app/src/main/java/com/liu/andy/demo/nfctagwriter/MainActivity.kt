@@ -37,21 +37,33 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.liu.andy.demo.nfctagwriter.navigation.Screen
 import com.liu.andy.demo.nfctagwriter.ui.ntag424.NTag424Screen
 import com.liu.andy.demo.nfctagwriter.ui.ntag424.NTag424ViewModel
 import com.liu.andy.demo.nfctagwriter.ui.ntag21x.NTag21XScreen
 import com.liu.andy.demo.nfctagwriter.ui.ntag21x.NTag21XViewModel
 import com.liu.andy.demo.nfctagwriter.ui.settings.SettingsScreen
+import com.liu.andy.demo.nfctagwriter.ui.deeplink.DeepLinkScreen
+import com.liu.andy.demo.nfctagwriter.ui.deeplink.DeepLinkViewModel
 import com.liu.andy.demo.nfctagwriter.ui.theme.NFCTagWriterTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import com.liu.andy.demo.nfctagwriter.nfc.NTag424Manager
 
 class MainActivity : ComponentActivity() {
     private var nfcAdapter: NfcAdapter? = null
     private var pendingIntent: PendingIntent? = null
+    private val nfcManager = NTag424Manager()
+    private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var navController: androidx.navigation.NavController? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -76,13 +88,17 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen()
+                    MainScreen { navController ->
+                        this@MainActivity.navController = navController
+                    }
                 }
             }
         }
         
-        // Handle NFC intent if present
+        // Handle NFC intent if present (check both getIntent() and intent parameter)
         handleNfcIntent(intent)
+        // Also check if we were launched with ACTION_VIEW (from background NFC tag)
+        handleNfcIntent(getIntent())
     }
     
     override fun onResume() {
@@ -99,20 +115,97 @@ class MainActivity : ComponentActivity() {
     
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent) // Important: update the intent so getIntent() returns the latest
         handleNfcIntent(intent)
     }
     
     private fun handleNfcIntent(intent: Intent) {
+        // Check if this is an ACTION_VIEW intent with a URL (from NFC tag in background)
+        if (Intent.ACTION_VIEW == intent.action) {
+            val data = intent.data
+            if (data != null) {
+                val url = data.toString()
+                Log.d("MainActivity", "Received ACTION_VIEW intent with URL: $url")
+                // Navigate to DeepLinkScreen with the URL
+                activityScope.launch {
+                    var attempts = 0
+                    while (navController == null && attempts < 50) {
+                        kotlinx.coroutines.delay(100)
+                        attempts++
+                    }
+                    val encodedUrl = android.net.Uri.encode(url, "")
+                    navController?.navigate("${Screen.DeepLink.route}?url=$encodedUrl") {
+                        popUpTo(Screen.NTag424.route) { inclusive = false }
+                        launchSingleTop = true
+                    } ?: run {
+                        Log.w("MainActivity", "NavController not ready for ACTION_VIEW")
+                    }
+                }
+                return
+            }
+        }
+        
+        // Handle NFC tag intents (foreground detection)
         if (NfcAdapter.ACTION_TAG_DISCOVERED == intent.action ||
             NfcAdapter.ACTION_NDEF_DISCOVERED == intent.action ||
             NfcAdapter.ACTION_TECH_DISCOVERED == intent.action) {
             val tag = intent.getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG)
             if (tag != null) {
                 // Store tag in a way that can be accessed by the ViewModel
-                // We'll use a shared ViewModel or pass it through navigation
                 NfcTagHolder.currentTag = tag
-                Log.d("MainActivity", "Tag detected 1: ${tag.techList.joinToString()}")
-                Toast.makeText(this, "Tag detected by MY app!", Toast.LENGTH_SHORT).show()
+                Log.d("MainActivity", "Tag detected: ${tag.techList.joinToString()}")
+                
+                // Check if this is an NTAG424 tag (supports IsoDep or NfcA)
+                val isNTAG424 = tag.techList.contains(android.nfc.tech.IsoDep::class.java.name) ||
+                               tag.techList.contains(android.nfc.tech.NfcA::class.java.name)
+                
+                if (isNTAG424) {
+                    // Read URL from NTAG424 tag and check if it matches Firewalla pattern
+                    activityScope.launch {
+                        try {
+                            val result = nfcManager.readData(tag)
+                            result.onSuccess { url ->
+                                Log.d("MainActivity", "Read URL from tag: $url")
+                                
+                                // Check if URL matches Firewalla pattern (mesh.firewalla.net/nfc)
+                                // Use regex to match the pattern more precisely
+                                val firewallaPattern = Regex(
+                                    "https?://(?:www\\.)?mesh\\.firewalla\\.net/nfc",
+                                    RegexOption.IGNORE_CASE
+                                )
+                                val isFirewallaUrl = firewallaPattern.containsMatchIn(url)
+                                
+                                if (isFirewallaUrl) {
+                                    // Wait for navController to be ready (with timeout)
+                                    var attempts = 0
+                                    while (navController == null && attempts < 50) {
+                                        kotlinx.coroutines.delay(100)
+                                        attempts++
+                                    }
+                                    // Navigate to DeepLinkScreen with the URL
+                                    val encodedUrl = android.net.Uri.encode(url, "")
+                                    navController?.navigate("${Screen.DeepLink.route}?url=$encodedUrl") {
+                                        popUpTo(Screen.NTag424.route) { inclusive = false }
+                                        launchSingleTop = true
+                                    } ?: run {
+                                        Log.w("MainActivity", "NavController not ready, storing URL for later navigation")
+                                    }
+                                } else {
+                                    // Not a Firewalla URL, just store the tag for NTag424Screen
+                                    Log.d("MainActivity", "URL does not match Firewalla pattern, tag stored for manual operations")
+                                }
+                            }.onFailure { exception ->
+                                Log.e("MainActivity", "Failed to read tag: ${exception.message}")
+                                // Even if read fails, store the tag so user can try manually
+                            }
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error reading tag: ${e.message}", e)
+                            // Even if read fails, store the tag so user can try manually
+                        }
+                    }
+                } else {
+                    Toast.makeText(this, "Tag detected by MY app!", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -131,10 +224,15 @@ object NfcTagHolder {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen() {
+fun MainScreen(onNavControllerReady: (androidx.navigation.NavController) -> Unit = {}) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    
+    // Notify parent about navController
+    androidx.compose.runtime.LaunchedEffect(navController) {
+        onNavControllerReady(navController)
+    }
 
     Scaffold(
         topBar = {
@@ -216,6 +314,24 @@ fun MainScreen() {
             }
             composable(Screen.Settings.route) {
                 SettingsScreen()
+            }
+            composable(
+                route = "${Screen.DeepLink.route}?url={url}",
+                arguments = listOf(
+                    navArgument("url") {
+                        type = NavType.StringType
+                        defaultValue = null
+                        nullable = true
+                    }
+                )
+            ) { backStackEntry ->
+                val viewModel: DeepLinkViewModel = viewModel()
+                val url = backStackEntry.arguments?.getString("url")
+                DeepLinkScreen(
+                    viewModel = viewModel,
+                    navController = navController,
+                    initialUrl = url
+                )
             }
         }
     }
