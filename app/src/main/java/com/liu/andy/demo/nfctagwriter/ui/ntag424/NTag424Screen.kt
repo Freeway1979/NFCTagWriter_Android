@@ -34,6 +34,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -60,9 +61,17 @@ fun NTag424Screen(
     val statusMessage by viewModel.statusMessage.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()
     val logMessages by viewModel.logMessages.collectAsState()
+    val showApproachTagDialog by viewModel.showApproachTagDialog.collectAsState()
 
     val scrollState = rememberScrollState()
     val logScrollState = rememberScrollState()
+
+    // Approach Tag Dialog - placed outside Column to overlay properly
+    if (showApproachTagDialog) {
+        ApproachTagDialog(
+            onDismiss = { viewModel.dismissApproachTagDialog() }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -384,4 +393,60 @@ fun NTag424Screen(
             }
         }
     }
+}
+
+/**
+ * Dialog to guide user to approach the NFC tag
+ */
+@Composable
+fun ApproachTagDialog(
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Filled.Nfc,
+                contentDescription = "NFC Tag",
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        },
+        title = {
+            Text(
+                text = "Approach NFC Tag",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.ArrowDownward,
+                    contentDescription = "Approach",
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Please approach your NTAG424 tag to the back of your device.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "Keep the tag close until the operation completes.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
