@@ -216,7 +216,7 @@ class NTag424ViewModel : ViewModel() {
                     val dataLength = data.length
                     addLog("SUCCESS: Data read successfully (${dataLength} characters)")
                     if (data.isNotEmpty()) {
-                        addLog("Data preview: ${data.take(50)}${if (data.length > 50) "..." else ""}")
+                        addLog("Data preview: $data")
                     } else {
                         addLog("Data is empty")
                     }
@@ -262,7 +262,7 @@ class NTag424ViewModel : ViewModel() {
             _statusMessage.value = "Writing data..."
             addLog("Starting data write operation (with authentication)...")
             addLog("Data length: ${dataValue.length} characters")
-            addLog("Data preview: ${dataValue.take(50)}${if (dataValue.length > 50) "..." else ""}")
+            addLog("Data preview: $dataValue")
             
             nfcManager.writeData(tag, dataValue, passwordValue)
                 .onSuccess {

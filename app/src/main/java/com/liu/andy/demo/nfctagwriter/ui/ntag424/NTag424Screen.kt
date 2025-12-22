@@ -99,7 +99,7 @@ fun NTag424Screen(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Status Message
         if (statusMessage.isNotEmpty()) {
@@ -156,9 +156,8 @@ fun NTag424Screen(
                     maxLines = 5
                 )
             }
+            Spacer(modifier = Modifier.height(8.dp))
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         // Log Section (above Password section)
         Column(
@@ -278,23 +277,23 @@ fun NTag424Screen(
                 Text("Set Password")
             }
 
-            // Configure CC File Button
-            Button(
-                onClick = { viewModel.configureCcFile() },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF2196F3) // Blue
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Nfc,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Configure CC File")
-            }
+//            // Configure CC File Button
+//            Button(
+//                onClick = { viewModel.configureCcFile() },
+//                modifier = Modifier.fillMaxWidth(),
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = Color(0xFF2196F3) // Blue
+//                ),
+//                shape = RoundedCornerShape(12.dp)
+//            ) {
+//                Icon(
+//                    imageVector = Icons.Filled.Nfc,
+//                    contentDescription = null,
+//                    modifier = Modifier.size(20.dp)
+//                )
+//                Spacer(modifier = Modifier.width(8.dp))
+//                Text("Configure CC File")
+//            }
 
             // Configure File Access Button
             Button(
