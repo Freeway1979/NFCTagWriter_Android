@@ -322,6 +322,16 @@ class NTag424Manager {
         }
     }
 
+    /**
+     * Convert string to hex string using ASCII mapping
+     * Example: "915565AB915565AB" -> "39313535363541423931353536354142"
+     */
+    private fun stringToHexString(input: String): String {
+        return input.map { char ->
+            String.format("%02X", char.code)
+        }.joinToString("")
+    }
+
     fun getKeySet(): KeySet {
         // NOTE - replace these with your own keys.
         //
@@ -335,7 +345,8 @@ class NTag424Manager {
         // This is the "master" key
         val key0 = KeyInfo()
         key0.diversifyKeys = false
-        key0.key =  key0Str.toByteArray() // Ntag424.FACTORY_KEY
+        val passwordValue = stringToHexString(key0Str)
+        key0.key = hexStringToByteArray(passwordValue) // Ntag424.FACTORY_KEY
         keySet.setKey(Permissions.ACCESS_KEY0, key0)
 
         // No standard usage
