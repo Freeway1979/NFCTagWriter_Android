@@ -53,6 +53,7 @@ fun DeepLinkScreen(
     val urlParams by viewModel.urlParams.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val verificationResult by viewModel.verificationResult.collectAsState()
     
     // Parse initial URL if provided
     LaunchedEffect(initialUrl) {
@@ -151,8 +152,8 @@ fun DeepLinkScreen(
                 
                 urlParams != null -> {
                     val params = urlParams!! // Store in local variable for smart cast
-                    android.util.Log.d("DeepLinkScreen", "Showing urlParams: gid=${params.gid}, rule=${params.rule}, chksum=${params.chksum}")
-                    UrlDetailsCard(params)
+                    android.util.Log.d("DeepLinkScreen", "Showing urlParams: gid=${params.gid}, rule=${params.rule}, uid=${params.uid}, counter=${params.counter}, cmac=${params.cmac}")
+                    UrlDetailsCard(params, verificationResult)
                 }
                 
                 else -> {
@@ -184,7 +185,7 @@ fun DeepLinkScreen(
 }
 
 @Composable
-fun UrlDetailsCard(urlParams: FirewallaUrlParams) {
+fun UrlDetailsCard(urlParams: FirewallaUrlParams, verificationResult: Boolean? = null) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -233,12 +234,65 @@ fun UrlDetailsCard(urlParams: FirewallaUrlParams) {
                 )
             }
             
-            // Checksum
-            if (urlParams.chksum != null) {
+            // UID
+            if (urlParams.uid != null) {
                 ParameterRow(
-                    label = "Checksum",
-                    value = urlParams.chksum
+                    label = "UID",
+                    value = urlParams.uid
                 )
+            }
+            
+            // Counter
+            if (urlParams.counter != null) {
+                ParameterRow(
+                    label = "Counter",
+                    value = urlParams.counter
+                )
+            }
+            
+            // CMAC
+            if (urlParams.cmac != null) {
+                ParameterRow(
+                    label = "CMAC",
+                    value = urlParams.cmac
+                )
+            }
+            
+            // SDM MAC Verification Result
+            if (verificationResult != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            color = if (verificationResult) {
+                                Color(0xFF4CAF50).copy(alpha = 0.2f)
+                            } else {
+                                Color(0xFFD32F2F).copy(alpha = 0.2f)
+                            },
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = if (verificationResult) Icons.Filled.CheckCircle else Icons.Filled.Error,
+                        contentDescription = "Verification Result",
+                        tint = if (verificationResult) Color(0xFF4CAF50) else Color(0xFFD32F2F),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = if (verificationResult) {
+                            "SDM MAC Verification: PASSED ✓"
+                        } else {
+                            "SDM MAC Verification: FAILED ✗"
+                        },
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (verificationResult) Color(0xFF4CAF50) else Color(0xFFD32F2F)
+                    )
+                }
             }
             
             // Full URL

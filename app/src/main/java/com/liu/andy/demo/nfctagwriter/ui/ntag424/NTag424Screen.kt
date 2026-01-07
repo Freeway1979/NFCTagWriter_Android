@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import kotlinx.coroutines.delay
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -65,6 +66,13 @@ fun NTag424Screen(
 
     val scrollState = rememberScrollState()
     val logScrollState = rememberScrollState()
+    
+    // Clear action when processing completes
+    LaunchedEffect(isProcessing) {
+        if (!isProcessing) {
+            NTag424ActionHandler.setAction(null)
+        }
+    }
 
     // Approach Tag Dialog - placed outside Column to overlay properly
     if (showApproachTagDialog) {
@@ -269,7 +277,10 @@ fun NTag424Screen(
 
             // Set Password Button
             Button(
-                onClick = { viewModel.setPassword() },
+                onClick = {
+                    NTag424ActionHandler.setAction(NTag424Action.SET_PASSWORD)
+                    viewModel.setPassword()
+                },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isProcessing,
                 colors = ButtonDefaults.buttonColors(
@@ -306,7 +317,10 @@ fun NTag424Screen(
 
             // Configure File Access Button
             Button(
-                onClick = { viewModel.configureFileAccess() },
+                onClick = {
+                    NTag424ActionHandler.setAction(NTag424Action.CONFIGURE_FILE_ACCESS)
+                    viewModel.configureFileAccess()
+                },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isProcessing,
                 colors = ButtonDefaults.buttonColors(
@@ -355,7 +369,10 @@ fun NTag424Screen(
             ) {
                 // Read Button
                 Button(
-                    onClick = { viewModel.readData() },
+                    onClick = {
+                        NTag424ActionHandler.setAction(NTag424Action.READ_DATA)
+                        viewModel.readData()
+                    },
                     modifier = Modifier.weight(1f),
                     enabled = !isProcessing,
                     colors = ButtonDefaults.buttonColors(
@@ -374,7 +391,10 @@ fun NTag424Screen(
 
                 // Write Button
                 Button(
-                    onClick = { viewModel.writeData() },
+                    onClick = {
+                        NTag424ActionHandler.setAction(NTag424Action.WRITE_DATA)
+                        viewModel.writeData()
+                    },
                     modifier = Modifier.weight(1f),
                     enabled = !isProcessing,
                     colors = ButtonDefaults.buttonColors(

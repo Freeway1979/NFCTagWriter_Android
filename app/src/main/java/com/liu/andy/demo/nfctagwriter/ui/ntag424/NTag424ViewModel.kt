@@ -9,6 +9,29 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.liu.andy.demo.nfctagwriter.nfc.NTag424Manager
 
+/**
+ * Enum representing the current action being performed on the tag
+ */
+enum class NTag424Action {
+    SET_PASSWORD,
+    CONFIGURE_FILE_ACCESS,
+    CONFIGURE_CC_FILE,
+    READ_DATA,
+    WRITE_DATA
+}
+
+/**
+ * Shared state object to track current action (accessible from MainActivity and NTag424Screen)
+ */
+object NTag424ActionHandler {
+    var currentAction: NTag424Action? = null
+        private set
+    
+    fun setAction(action: NTag424Action?) {
+        currentAction = action
+    }
+}
+
 class NTag424ViewModel : ViewModel() {
 
     private val nfcManager = NTag424Manager()
@@ -16,7 +39,7 @@ class NTag424ViewModel : ViewModel() {
     private val _password = MutableStateFlow("915565AB915565AB")
     val password: StateFlow<String> = _password.asStateFlow()
 
-    private val _dataToWrite = MutableStateFlow("https://mesh.firewalla.net/nfc?gid=915565a3-65c7-4a2b-8629-194d80ed824b&rule=248")
+    private val _dataToWrite = MutableStateFlow("https://freeway1979.github.io/nfc?gid=915565a3-65c7-4a2b-8629-194d80ed824b&rule=249&u=00000000000000&c=000000&m=0000000000000000")
     val dataToWrite: StateFlow<String> = _dataToWrite.asStateFlow()
     
     private val _readResult = MutableStateFlow("")
@@ -146,18 +169,18 @@ class NTag424ViewModel : ViewModel() {
             // Convert password string to hex string using ASCII mapping
             // TODO: with iOS, the 32 hex characters should be better. Like "F93E13535363E414F39313535F6F54142", not use ASCII mapping.
             val passwordValue = stringToHexString(passwordInput)
-            
+            addLog("setPassword:$passwordValue")
             if (passwordValue.length != 32) {
                 _statusMessage.value = "Error: Password must be exactly 32 hex characters (16 bytes) after conversion"
                 addLog("ERROR: Invalid password length after conversion (${passwordValue.length} chars, expected 32)")
                 return@requestTagConnection
             }
-            
+
             viewModelScope.launch {
                 _isProcessing.value = true
                 _statusMessage.value = "Setting password..."
                 addLog("Starting password setting operation...")
-                addLog("Password: ${passwordValue.take(8)}...${passwordValue.takeLast(8)}")
+                addLog("Password: $passwordValue")
                 
                 nfcManager.setPassword(tag, passwordValue)
                     .onSuccess {
@@ -235,7 +258,7 @@ class NTag424ViewModel : ViewModel() {
                 nfcManager.configureFileAccess(tag, passwordValue)
                     .onSuccess {
                         _statusMessage.value = "Success: File access configured successfully"
-                        addLog("SUCCESS: File access configured - Write protected, Read public")
+                        addLog("SUCCESS: File access configured with SDM - Write protected, Read public")
                     }
                     .onFailure { exception ->
                         val errorMsg = exception.message ?: "Failed to configure file access"

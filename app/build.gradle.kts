@@ -40,6 +40,12 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = libs.versions.composeCompiler.get()
     }
+    
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 composeCompiler {
@@ -63,7 +69,8 @@ dependencies {
     
     // NFC
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
-    
+    // CMAC
+    implementation("org.bouncycastle:bcprov-jdk15on:1.70")
     // NTAG424 Java Library - Add the JAR file to app/libs/ directory
     // Download from: https://github.com/johnnyb/ntag424-java
     // After building with 'mvn clean install', copy target/ntag424-VERSION.jar to app/libs/
