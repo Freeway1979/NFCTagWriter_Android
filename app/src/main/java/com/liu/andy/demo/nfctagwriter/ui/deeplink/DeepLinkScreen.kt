@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -107,21 +110,22 @@ fun DeepLinkScreen(
             )
         )
         
-        // Content
+        // Content with scroll support
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             when {
                 isLoading -> {
                     android.util.Log.d("DeepLinkScreen", "Showing loading state")
                     Column(
+                        modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.Center
                     ) {
                         CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = "Reading tag data...",
                             style = MaterialTheme.typography.bodyLarge
@@ -132,8 +136,9 @@ fun DeepLinkScreen(
                 errorMessage != null -> {
                     android.util.Log.d("DeepLinkScreen", "Showing error: $errorMessage")
                     Column(
+                        modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Error,
@@ -141,6 +146,7 @@ fun DeepLinkScreen(
                             modifier = Modifier.size(64.dp),
                             tint = Color(0xFFD32F2F)
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = errorMessage ?: "Unknown error",
                             style = MaterialTheme.typography.bodyLarge,
@@ -152,15 +158,22 @@ fun DeepLinkScreen(
                 
                 urlParams != null -> {
                     val params = urlParams!! // Store in local variable for smart cast
-                    android.util.Log.d("DeepLinkScreen", "Showing urlParams: gid=${params.gid}, rule=${params.rule}, uid=${params.uid}, counter=${params.counter}, cmac=${params.cmac}")
-                    UrlDetailsCard(params, verificationResult)
+                    android.util.Log.d("DeepLinkScreen", "Showing urlParams: gid=${params.gid}, rule=${params.rule}, uid=${params.uid}, counter=${params.counter}, cmac=${params.cmac}, fullUrl=${params.fullUrl}")
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        UrlDetailsCard(params, verificationResult)
+                    }
                 }
                 
                 else -> {
                     android.util.Log.d("DeepLinkScreen", "Showing empty state - isLoading=$isLoading, errorMessage=$errorMessage, urlParams=$urlParams, initialUrl=$initialUrl")
                     Column(
+                        modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Info,
@@ -168,6 +181,7 @@ fun DeepLinkScreen(
                             modifier = Modifier.size(64.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = if (initialUrl != null) {
                                 "Parsing URL..."
@@ -195,13 +209,13 @@ fun UrlDetailsCard(urlParams: FirewallaUrlParams, verificationResult: Boolean? =
         )
     ) {
         Column(
-            modifier = Modifier.padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Header
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
                     imageVector = Icons.Filled.CheckCircle,
@@ -215,8 +229,6 @@ fun UrlDetailsCard(urlParams: FirewallaUrlParams, verificationResult: Boolean? =
                     fontWeight = FontWeight.Bold
                 )
             }
-            
-            Spacer(modifier = Modifier.height(8.dp))
             
             // GID
             if (urlParams.gid != null) {
@@ -260,7 +272,6 @@ fun UrlDetailsCard(urlParams: FirewallaUrlParams, verificationResult: Boolean? =
             
             // SDM MAC Verification Result
             if (verificationResult != null) {
-                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -272,7 +283,7 @@ fun UrlDetailsCard(urlParams: FirewallaUrlParams, verificationResult: Boolean? =
                             },
                             shape = RoundedCornerShape(8.dp)
                         )
-                        .padding(12.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -295,23 +306,29 @@ fun UrlDetailsCard(urlParams: FirewallaUrlParams, verificationResult: Boolean? =
                 }
             }
             
-            // Full URL
-            if (urlParams.fullUrl != null) {
+            // Full URL - Always show with divider for better visibility
+            Divider(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.outlineVariant,
+                thickness = 1.dp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Full URL:",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold
+                )
                 Spacer(modifier = Modifier.height(8.dp))
-                Column {
-                    Text(
-                        text = "Full URL:",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = urlParams.fullUrl,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                Text(
+                    text = urlParams.fullUrl ?: "Not available",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
@@ -326,7 +343,7 @@ fun ParameterRow(label: String, value: String) {
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 shape = RoundedCornerShape(8.dp)
             )
-            .padding(12.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {

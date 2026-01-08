@@ -423,29 +423,20 @@ class MainActivity : ComponentActivity() {
                                 val result = nfcManager.readData(tag)
                                 result.onSuccess { url ->
                                     Log.d("MainActivity", "Read URL from tag: $url")
-                                    // Create verifier with KEY3 parameters matching the tag configuration
                                     // KEY3 base key: FACTORY_KEY (all zeros)
-                                    // KEY3 system identifier: "testing"
-                                    // KEY3 version: 1
                                     val key3BaseKey = Ntag424.FACTORY_KEY // All zeros
-                                    val key3SystemId = "testing".toByteArray(StandardCharsets.UTF_8)
-                                    val key3Version = 1
-                                    val key0Str = "915565AB915565AB"
                                     val verifier = NTAG424Verifier(
-                                        masterKey = key0Str.toByteArray(), // Not used for SDM MAC, but kept for compatibility
                                         key3BaseKey = key3BaseKey,
-                                        key3SystemIdentifier = key3SystemId,
-                                        key3Version = key3Version
                                     )
                                     val isValid = verifier.verifySDMMAC(url)
                                     Log.d(
                                         "MainActivity",
-                                        "SDM MAC verification: ${if (isValid) "PASSED" else "FAILED"}"
+                                        "SDM MAC verification: ${if (isValid) "✅ PASSED" else "❌ FAILED"}"
                                     )
                                     // Check if URL matches Firewalla pattern (mesh.firewalla.net/nfc)
                                     // Use regex to match the pattern more precisely
                                     val firewallaPattern = Regex(
-                                        "https?://(?:www\\.)?freeway1979\\.github\\.io/nfc",
+                                        NTAG424Verifier.nfcUrlPattern,
                                         RegexOption.IGNORE_CASE
                                     )
                                     val isFirewallaUrl = firewallaPattern.containsMatchIn(url)

@@ -258,7 +258,6 @@ class NTag424Manager {
                 Log.d(TAG, "Card UID: " + ByteUtil.byteToHex(cardUid))
                 val keyVersion = GetKeyVersion.run(communicator, 0)
                 Log.d(TAG, "Key 0 version: " + keyVersion)
-
                 // Doing this will set LRP mode for all future authentications
                 // SetCapabilities.run(communicator, true);
 
@@ -281,7 +280,7 @@ class NTag424Manager {
                     Permissions.ACCESS_KEY3 // Used to create the MAC and Encrypt FileData
                 sdmSettings.sdmOptionUid = true
                 sdmSettings.sdmOptionReadCounter = true
-
+                sdmSettings.sdmOptionUseAscii = true
                 // NDEF SDM formatter helper - uses a template to write SDMSettings and get file data
                 val master = NdefTemplateMaster()
                 master.usesLRP = false
@@ -291,7 +290,8 @@ class NTag424Manager {
 //                        secretData,
                     sdmSettings
                 )
-
+                Log.d(TAG, "sdmSettings:${sdmSettings.sdmMacInputOffset} ${sdmSettings.sdmMacOffset}")
+                print("sdmSettings:${sdmSettings.sdmMacInputOffset} ${sdmSettings.sdmMacOffset}")
                 // This link (not by me) has a handy decoder if you are using factory keys (we are using a diversified factory key, so this will not work unless you change that in the keyset):
                 // byte[] ndefRecord = master.generateNdefTemplateFromUrlString("https://sdm.nfcdeveloper.com/tagpt?uid={UID}&ctr={COUNTER}&cmac={MAC}", sdmSettings);
 
@@ -309,6 +309,11 @@ class NTag424Manager {
                     "New Ndef Settings: " + debugStringForFileSettings(ndeffs)
                 )
                 ChangeFileSettings.run(communicator, Ntag424.NDEF_FILE_NUMBER, ndeffs)
+                val savedSettings = GetFileSettings.run(communicator, Ntag424.NDEF_FILE_NUMBER)
+                Log.d(
+                    TAG,
+                    "Check Saved Settings: " + debugStringForFileSettings(ndeffs)
+                )
             } else {
                 Log.d(TAG, "Login unsuccessful")
             }
@@ -364,11 +369,11 @@ class NTag424Manager {
         // Usually used as the MAC and encryption key.
         // The MAC key usually has the diversification information setup.
         val key3 = KeyInfo()
-        key3.diversifyKeys = true
-        key3.systemIdentifier =
-            "testing".toByteArray(StandardCharsets.UTF_8) // systemIdentifier is usually a hex-encoded string based on the name of your intended use.
-        key3.version =
-            1 // Since it is not a factory key (it is *based* on a factory key, but underwent diversification), need to set to a version number other than 0.
+        key3.diversifyKeys = false
+//        key3.systemIdentifier =
+//            "testing".toByteArray(StandardCharsets.UTF_8) // systemIdentifier is usually a hex-encoded string based on the name of your intended use.
+//        key3.version =
+//            1 // Since it is not a factory key (it is *based* on a factory key, but underwent diversification), need to set to a version number other than 0.
         key3.key = Ntag424.FACTORY_KEY
 
         // No standard usage

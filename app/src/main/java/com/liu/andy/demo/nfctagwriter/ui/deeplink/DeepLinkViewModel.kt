@@ -134,23 +134,10 @@ class DeepLinkViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 android.util.Log.d("DeepLinkViewModel", "Verifying SDM MAC - uid: $uidHex, counter: $counterHex, cmac: $cmacHex")
-                
-                // Create verifier with KEY3 parameters matching the tag configuration
-                // KEY3 base key: FACTORY_KEY (all zeros)
-                // KEY3 system identifier: "testing"
-                // KEY3 version: 1
                 val key3BaseKey = Ntag424.FACTORY_KEY // All zeros
-                val key3SystemId = "testing".toByteArray(StandardCharsets.UTF_8)
-                val key3Version = 1
-                val key0Str = "915565AB915565AB"
-                
                 val verifier = NTAG424Verifier(
-                    masterKey = key0Str.toByteArray(), // Not used for SDM MAC, but kept for compatibility
-                    key3BaseKey = key3BaseKey,
-                    key3SystemIdentifier = key3SystemId,
-                    key3Version = key3Version
+                    key3BaseKey = key3BaseKey
                 )
-                
                 val isValid = verifier.verifySDMMAC(uidHex, counterHex, cmacHex)
                 _verificationResult.value = isValid
                 android.util.Log.d("DeepLinkViewModel", "SDM MAC verification result: ${if (isValid) "PASSED" else "FAILED"}")

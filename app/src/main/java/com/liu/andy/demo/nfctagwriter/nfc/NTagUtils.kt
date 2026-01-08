@@ -129,21 +129,24 @@ class NTagUtils {
         fun ByteArray.toHex(): String =
             joinToString("") { "%02X".format(it) }
 
-
-        fun hexStringToByteArray(s: String): ByteArray? {
-            try {
-                val len = s.length
-                val data = ByteArray(len / 2)
-                var i = 0
-                while (i < len) {
-                    data[i / 2] = ((s[i].digitToIntOrNull(16) ?: (-1 shl 4)) + s[i + 1]
-                        .digitToIntOrNull(16)!!).toByte()
-                    i += 2
-                }
-                return data
-            } catch (e: Exception) {
-                return null
+        fun hexStringToByteArray(hex: String): ByteArray {
+            val cleanHex = hex.replace(" ", "").replace("-", "")
+            val result = ByteArray(cleanHex.length / 2)
+            for (i in cleanHex.indices step 2) {
+                val str = cleanHex.substring(i, i + 2)
+                result[i / 2] = str.toInt(16).toByte()
             }
+            return result
+        }
+
+        /**
+         * Convert string to hex string using ASCII mapping
+         * Example: "915565AB915565AB" -> "39313535363541423931353536354142"
+         */
+        fun stringToHexString(input: String): String {
+            return input.map { char ->
+                String.format("%02X", char.code)
+            }.joinToString("")
         }
 
         /**

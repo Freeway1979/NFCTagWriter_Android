@@ -125,16 +125,23 @@ open class PiccData {
         return LRPCMAC(cipher)
     }
 
+    /**
+     * Generate AES CMAC for NTAG424 SDM MAC verification.
+     * 
+     * According to NTAG424 datasheet: CMAC uses AES in CBC mode with zero initialization vector (IV).
+     * This implementation correctly uses zeroIVPS (zero IV parameter spec) as required by the specification.
+     */
     protected fun generateAESCMAC(key: ByteArray): CMAC? {
         try {
             val keySpec = SecretKeySpec(generateAESSessionMacKey(key), "AES")
 
+            // NTAG424 specification requires: AES/CBC/NoPadding with zero IV
             val cipher = Cipher.getInstance("AES/CBC/NoPadding")
 
             cipher.init(
                 Cipher.ENCRYPT_MODE,
                 keySpec,
-                net.bplearning.ntag424.constants.Crypto.zeroIVPS
+                net.bplearning.ntag424.constants.Crypto.zeroIVPS  // Zero IV as per NTAG424 datasheet
             )
             val mac = AESCMAC(cipher, keySpec)
             return mac
