@@ -145,7 +145,8 @@ class NTag424Manager {
      * Set password (key) for the tag
      * Matches Swift implementation: tries default key first, then current password
      */
-    suspend fun setPassword(tag: Tag, newPasswordHex: String): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun setPassword(tag: Tag, newPasswordHex: String,
+                            oldPasswordHex: String): Result<String> = withContext(Dispatchers.IO) {
         try {
             val transceiver = getTransceiver(tag)
 
@@ -171,17 +172,16 @@ class NTag424Manager {
             // Step 1: Try to authenticate with default key first (for new tags)
             var authenticated = false
             var oldKey = FACTORY_KEY
-
             if (AESEncryptionMode.authenticateEV2(communicator, 0, FACTORY_KEY)) {
                 // Default key works - tag is new or password was reset
                 Log.d("NTag424Manager", "Default key works - tag is new or password was reset")
                 authenticated = true
             } else {
-                // Default key failed - try with the entered password as current password
-                Log.d("NTag424Manager", "Default key failed - trying with the entered password as current password")
-                oldKey = newKeyBytes
+                oldKey = NTagUtils.hexToBytes(oldPasswordHex)
+                Log.d("NTag424Manager", "Default key failed - trying with the old password")
                 if (AESEncryptionMode.authenticateEV2(communicator, 0, oldKey)) {
                     // The entered password matches the current password
+                    Log.d("NTag424Manager", "Old password succeeds $oldPasswordHex")
                     authenticated = true
                 } else {
                     return@withContext Result.failure(
@@ -219,6 +219,11 @@ class NTag424Manager {
             closeTag(tag)
         }
     }
+
+    /**
+     * Configure file access settings with authentication
+     * Sets the NDEF file to require authentication for write operations, allow read without auth
+     */
     suspend fun configureFileAccess(tag: Tag, passwordHex: String,
                                     supportSDM: Boolean = true): Result<String> = withContext(Dispatchers.IO) {
         // IsoDep runs the communication with the tag
@@ -286,7 +291,7 @@ class NTag424Manager {
                 master.usesLRP = false
 
                 val ndefRecord = master.generateNdefTemplateFromUrlString(
-                    "https://freeway1979.github.io/nfc?gid=915565a3-65c7-4a2b-8629-194d80ed824b&rule=249&u={UID}&c={COUNTER}&m={MAC}",
+                    "https://freeway1979.github.io/nfc?u={UID}&c={COUNTER}&m={MAC}&gid=915565a3-65c7-4a2b-8629-194d80ed824b&rule=249",
 //                        secretData,
                     sdmSettings
                 )
@@ -299,10 +304,10 @@ class NTag424Manager {
                 WriteData.run(communicator, Ntag424.NDEF_FILE_NUMBER, ndefRecord)
 
                 // Set the general NDEF permissions
-                ndeffs.readPerm = Permissions.ACCESS_EVERYONE
-                ndeffs.writePerm = Permissions.ACCESS_KEY0
-                ndeffs.readWritePerm = Permissions.ACCESS_KEY0 // backup key
-                ndeffs.changePerm = Permissions.ACCESS_KEY0
+                ndeffs.readPerm = ACCESS_EVERYONE
+                ndeffs.writePerm = ACCESS_KEY0
+                ndeffs.readWritePerm = ACCESS_KEY0 // backup key
+                ndeffs.changePerm = ACCESS_KEY0
                 ndeffs.sdmSettings = sdmSettings // Use the SDM settings we just setup
                 Log.d(
                     TAG,
@@ -312,7 +317,7 @@ class NTag424Manager {
                 val savedSettings = GetFileSettings.run(communicator, Ntag424.NDEF_FILE_NUMBER)
                 Log.d(
                     TAG,
-                    "Check Saved Settings: " + debugStringForFileSettings(ndeffs)
+                    "Check Saved Settings: " + debugStringForFileSettings(savedSettings)
                 )
             } else {
                 Log.d(TAG, "Login unsuccessful")
@@ -327,31 +332,21 @@ class NTag424Manager {
         }
     }
 
-    /**
-     * Convert string to hex string using ASCII mapping
-     * Example: "915565AB915565AB" -> "39313535363541423931353536354142"
-     */
-    private fun stringToHexString(input: String): String {
-        return input.map { char ->
-            String.format("%02X", char.code)
-        }.joinToString("")
-    }
-
     fun getKeySet(): KeySet {
         // NOTE - replace these with your own keys.
         //
         //        Any of the keys *can* be diversified
         //        if you don't use RandomID, but usually
         //        only the MAC key is diversified.
-        val key0Str = "915565AB915565AB"
+        val key0Str = NTAG424Data.masterKey0Pass
         val keySet = KeySet()
         keySet.setUsesLrp(false)
 
         // This is the "master" key
         val key0 = KeyInfo()
         key0.diversifyKeys = false
-        val passwordValue = stringToHexString(key0Str)
-        key0.key = hexStringToByteArray(passwordValue) // Ntag424.FACTORY_KEY
+        val passwordValue = key0Str
+        key0.key = hexStringToByteArray(passwordValue)
         keySet.setKey(Permissions.ACCESS_KEY0, key0)
 
         // No standard usage
@@ -389,134 +384,7 @@ class NTag424Manager {
 
         return keySet
     }
-    /**
-     * Configure file access settings with authentication
-     * Sets the NDEF file to require authentication for write operations, allow read without auth
-     */
-    suspend fun configureFileAccess2(tag: Tag, passwordHex: String,
-                                    supportSDM: Boolean = true): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val transceiver = getTransceiver(tag)
 
-            try {
-                val communicator = DnaCommunicator()
-                communicator.setTransceiver { bytesToSend ->
-                    transceiver(bytesToSend)
-                }
-                communicator.setLogger(Consumer { info: String? ->
-                    Log.d(
-                        "NTag424Manager",
-                        "Communicator: " + info
-                    )
-                })
-                communicator.beginCommunication()
-                // Select the DF file
-                IsoSelectFile.run(
-                    communicator,
-                    IsoSelectFile.SELECT_MODE_BY_FILE_IDENTIFIER,
-                    DF_FILE_ID
-                )
-
-                // Authenticate with the password
-                val keyBytes = hexStringToByteArray(passwordHex)
-                if (keyBytes.size != 16) {
-                    return@withContext Result.failure(
-                        IllegalArgumentException("Password must be 16 bytes (32 hex characters)")
-                    )
-                }
-
-                if (!AESEncryptionMode.authenticateEV2(communicator, 0, keyBytes)) {
-                    return@withContext Result.failure(
-                        IOException("Failed to authenticate with provided password")
-                    )
-                }
-
-                // Get current file settings
-                val fileSettings = GetFileSettings.run(communicator, NDEF_FILE_NUMBER)
-
-                // Configure file access: require authentication for write, allow read without auth
-                // Set write access to require Key 0
-                fileSettings.writePerm = ACCESS_KEY0
-                // Set read access to allow everyone (no authentication needed) - critical for iOS background detection
-                fileSettings.readPerm = ACCESS_EVERYONE
-                // Set R/W access to require Key 0
-                fileSettings.readWritePerm = ACCESS_KEY0
-                // Set change access to require Key 0
-                fileSettings.changePerm = ACCESS_KEY0
-                if (supportSDM) {
-                    // Secret data
-                    val secretData = byteArrayOf(
-                        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
-                    )
-
-                    // Set the access keys and options
-                    val sdmSettings = SDMSettings()
-                    sdmSettings.sdmEnabled = true
-                    sdmSettings.sdmMetaReadPerm =
-                        Permissions.ACCESS_KEY2 // Set to a key to get encrypted PICC data (usually non-diversified since you don't know the UID until after decryption)
-                    sdmSettings.sdmFileReadPerm =
-                        Permissions.ACCESS_KEY3 // Used to create the MAC and Encrypt FileData
-                    sdmSettings.sdmOptionUid = true
-                    sdmSettings.sdmOptionReadCounter = true
-
-                    // NDEF SDM formatter helper - uses a template to write SDMSettings and get file data
-                    val master = NdefTemplateMaster()
-                    master.usesLRP = false
-
-                    val ndefRecord = master.generateNdefTemplateFromUrlString(
-                        "https://freeway1979.github.io/nfc?gid=915565a3-65c7-4a2b-8629-194d80ed824b&rule=249&u={UID}&c={COUNTER}&m={MAC}",
-//                        secretData,
-                        sdmSettings
-                    )
-
-                    // This link (not by me) has a handy decoder if you are using factory keys (we are using a diversified factory key, so this will not work unless you change that in the keyset):
-                    // byte[] ndefRecord = master.generateNdefTemplateFromUrlString("https://sdm.nfcdeveloper.com/tagpt?uid={UID}&ctr={COUNTER}&cmac={MAC}", sdmSettings);
-
-                    // Write the record to the file
-                    WriteData.run(communicator, Ntag424.NDEF_FILE_NUMBER, ndefRecord)
-
-                    // Set the general NDEF permissions
-                    fileSettings.readPerm = Permissions.ACCESS_EVERYONE
-                    fileSettings.writePerm = Permissions.ACCESS_KEY0
-                    fileSettings.readWritePerm = Permissions.ACCESS_KEY0 // backup key
-                    fileSettings.changePerm = Permissions.ACCESS_KEY0
-                    fileSettings.sdmSettings = sdmSettings // Use the SDM settings we just setup
-
-                    android.util.Log.d(
-                        "NTag424Manager",
-                        "New Ndef Settings(SDM): " + debugStringForFileSettings(fileSettings)
-                    )
-                }
-                // Apply the new file settings
-                ChangeFileSettings.run(communicator, NDEF_FILE_NUMBER, fileSettings)
-
-                // Verify the configuration by reading back file settings
-                val verifiedSettings = GetFileSettings.run(communicator, NDEF_FILE_NUMBER)
-                android.util.Log.d("NTag424Manager", "Validate Ndef Settings: " + debugStringForFileSettings(verifiedSettings))
-
-                val successMsg = buildString {
-                    append("NDEF file access permissions configured successfully!\n\n")
-                    append("NDEF File (0x02) Access Permissions:\n")
-                    append("• Read Access: Free/ALL (0xE) - Open for all readers ✅\n")
-                    append("• Write Access: KEY_0 (0x0) - REQUIRES AUTHENTICATION 🔒\n")
-                    append("• R/W Access: KEY_0 (0x0) - Requires authentication\n")
-                    append("• Change Access: KEY_0 (0x0) - Requires authentication to change settings\n\n")
-                    append("📱 iOS Background Detection:\n")
-                    append("✅ NDEF File (0x02) is configured correctly!\n")
-                    append("✅ Readable by all third-party tools (NXP TagWriter, TagInfo, iOS, etc.)\n")
-                    append("🔒 Write-protected - Third-party tools CANNOT write without password!\n\n")
-                    append("💡 Note: Also configure CC File (0x01) using 'Configure CC File' button for full iOS background detection support.")
-                }
-
-                Result.success(successMsg)
-
-            } finally {
-                closeTag(tag)
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
     
     /**
      * Configure CC File for iOS background detection

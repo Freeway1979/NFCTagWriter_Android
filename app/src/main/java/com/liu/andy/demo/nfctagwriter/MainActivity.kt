@@ -279,7 +279,7 @@ class MainActivity : ComponentActivity() {
                     master.usesLRP = false
 
                     val ndefRecord = master.generateNdefTemplateFromUrlString(
-                        "https://freeway1979.github.io/nfc?gid=915565a3-65c7-4a2b-8629-194d80ed824b&rule=249&u={UID}&c={COUNTER}&m={MAC}",
+                        "https://freeway1979.github.io/nfc?u={UID}&c={COUNTER}&m={MAC}&gid=915565a3-65c7-4a2b-8629-194d80ed824b&rule=249",
 //                        secretData,
                         sdmSettings
                     )

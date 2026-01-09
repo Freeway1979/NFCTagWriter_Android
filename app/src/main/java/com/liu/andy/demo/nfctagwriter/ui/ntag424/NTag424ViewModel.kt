@@ -3,6 +3,7 @@ package com.liu.andy.demo.nfctagwriter.ui.ntag424
 import android.nfc.Tag
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.liu.andy.demo.nfctagwriter.nfc.NTAG424Data
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,10 +37,10 @@ class NTag424ViewModel : ViewModel() {
 
     private val nfcManager = NTag424Manager()
     
-    private val _password = MutableStateFlow("915565AB915565AB")
+    private val _password = MutableStateFlow(NTAG424Data.masterKey0Pass)
     val password: StateFlow<String> = _password.asStateFlow()
 
-    private val _dataToWrite = MutableStateFlow("https://freeway1979.github.io/nfc?gid=915565a3-65c7-4a2b-8629-194d80ed824b&rule=249&u=00000000000000&c=000000&m=0000000000000000")
+    private val _dataToWrite = MutableStateFlow("https://freeway1979.github.io/nfc?u=00000000000000&c=000000&m=0000000000000000&gid=915565a3-65c7-4a2b-8629-194d80ed824b&rule=249")
     val dataToWrite: StateFlow<String> = _dataToWrite.asStateFlow()
     
     private val _readResult = MutableStateFlow("")
@@ -151,16 +152,6 @@ class NTag424ViewModel : ViewModel() {
         _pendingOperation.value = null
     }
 
-    /**
-     * Convert string to hex string using ASCII mapping
-     * Example: "915565AB915565AB" -> "39313535363541423931353536354142"
-     */
-    private fun stringToHexString(input: String): String {
-        return input.map { char ->
-            String.format("%02X", char.code)
-        }.joinToString("")
-    }
-    
     fun setPassword() {
         requestTagConnection {
             val tag = currentTag ?: return@requestTagConnection
@@ -168,7 +159,7 @@ class NTag424ViewModel : ViewModel() {
             val passwordInput = _password.value.trim()
             // Convert password string to hex string using ASCII mapping
             // TODO: with iOS, the 32 hex characters should be better. Like "F93E13535363E414F39313535F6F54142", not use ASCII mapping.
-            val passwordValue = stringToHexString(passwordInput)
+            val passwordValue = passwordInput
             addLog("setPassword:$passwordValue")
             if (passwordValue.length != 32) {
                 _statusMessage.value = "Error: Password must be exactly 32 hex characters (16 bytes) after conversion"
@@ -182,7 +173,9 @@ class NTag424ViewModel : ViewModel() {
                 addLog("Starting password setting operation...")
                 addLog("Password: $passwordValue")
                 
-                nfcManager.setPassword(tag, passwordValue)
+                nfcManager.setPassword(tag,
+                    newPasswordHex = passwordValue,
+                    oldPasswordHex = NTAG424Data.oldMasterKey0Pass)
                     .onSuccess {
                         _statusMessage.value = "Success: Password set successfully"
                         addLog("SUCCESS: Password set successfully")
@@ -205,7 +198,7 @@ class NTag424ViewModel : ViewModel() {
             
             val passwordInput = _password.value.trim()
             // Convert password string to hex string using ASCII mapping
-            val passwordValue = stringToHexString(passwordInput)
+            val passwordValue = passwordInput
             
             if (passwordValue.length != 32) {
                 _statusMessage.value = "Error: Password must be exactly 32 hex characters (16 bytes) after conversion"
@@ -241,7 +234,7 @@ class NTag424ViewModel : ViewModel() {
             
             val passwordInput = _password.value.trim()
             // Convert password string to hex string using ASCII mapping
-            val passwordValue = stringToHexString(passwordInput)
+            val passwordValue = passwordInput
             
             if (passwordValue.length != 32) {
                 _statusMessage.value = "Error: Password must be exactly 32 hex characters (16 bytes) after conversion"
@@ -312,7 +305,7 @@ class NTag424ViewModel : ViewModel() {
             
             val passwordInput = _password.value.trim()
             // Convert password string to hex string using ASCII mapping
-            val passwordValue = stringToHexString(passwordInput)
+            val passwordValue = passwordInput
             
             if (passwordValue.length != 32) {
                 _statusMessage.value = "Error: Password must be exactly 32 hex characters (16 bytes) after conversion"
