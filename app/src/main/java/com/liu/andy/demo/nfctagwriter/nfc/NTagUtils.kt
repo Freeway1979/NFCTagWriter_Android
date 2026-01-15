@@ -1,21 +1,29 @@
 package com.liu.andy.demo.nfctagwriter.nfc
 
-import android.Manifest
-import android.content.Context
 import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import androidx.annotation.RequiresPermission
+import androidx.compose.ui.text.toUpperCase
+import org.bouncycastle.crypto.digests.MD5Digest
+import org.bouncycastle.jcajce.provider.digest.MD5
+import java.security.Signature
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.lang.reflect.Array
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
+import java.security.KeyFactory
+import java.security.KeyPair
+import java.security.KeyPairGenerator
+import java.security.PrivateKey
+import java.security.PublicKey
 import java.security.SecureRandom
+import java.security.Security
+import java.security.spec.ECGenParameterSpec
+import java.security.spec.PKCS8EncodedKeySpec
+import java.security.spec.X509EncodedKeySpec
 import java.text.SimpleDateFormat
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import java.util.Arrays
 import java.util.Date
 import java.util.Locale
 import kotlin.math.min
@@ -26,6 +34,122 @@ class NTagUtils {
     }
 
     companion object {
+        init {
+            if (Security.getProvider("BC") == null) {
+                Security.addProvider(BouncyCastleProvider())
+            }
+        }
+
+        // f6cfb225-d69b-4fbb-9eda-624b0b20516e
+        fun generateKey0Pass(bLicense: String): String {
+            val md5 = MD5.Digest()
+            val bytes = md5.digest(bLicense.uppercase(Locale.US).toByteArray(StandardCharsets.US_ASCII))
+            return bytesToHexNpeUpperCase(bytes)
+        }
+
+        /**
+         * 将 Hex 字符串转换为 ECC 公钥 (X.509 格式)
+         */
+        fun loadPublicKeyFromHex(hex: String): PublicKey {
+            // 确保 BC Provider 已注册
+            if (Security.getProvider("BC") == null) {
+                Security.addProvider(BouncyCastleProvider())
+            }
+            val keyBytes = hexStringToByteArray(hex)
+            val spec = X509EncodedKeySpec(keyBytes)
+            val kf = KeyFactory.getInstance("ECDSA", "BC")
+            return kf.generatePublic(spec)
+        }
+
+        /**
+         * 将 Hex 字符串转换为 ECC 私钥 (PKCS#8 格式)
+         */
+        fun loadPrivateKeyFromHex(hex: String): PrivateKey {
+            // 确保 BC Provider 已注册
+            if (Security.getProvider("BC") == null) {
+                Security.addProvider(BouncyCastleProvider())
+            }
+            val keyBytes = hexStringToByteArray(hex)
+            val spec = PKCS8EncodedKeySpec(keyBytes)
+            val kf = KeyFactory.getInstance("ECDSA", "BC")
+            return kf.generatePrivate(spec)
+        }
+        /**
+         * 1.算法选择：使用了 SHA256withECDSA。
+         * 这是目前移动端和嵌入式安全（包括 NFC 验证）最通用的签名算法。
+         * 2.Bouncy Castle 依赖：代码显式指定了 "BC" 作为 Provider。
+         * 由于 Android 系统自带了一个精简版的 Bouncy Castle，可能会有兼容性问题，所以通过 Security.addProvider(BouncyCastleProvider()) 强制使用您依赖中定义的 1.70 版本。
+         * 3.曲线名称：secp256r1 是标准曲线，具有极高的安全性且计算效率高。
+         * 4.输入处理：签名函数接受 ByteArray。在处理 NTAG424 时，您通常会从 Tag 对象获取 7 字节的 UID，或者从读取到的 NDEF 文本中提取。
+         */
+        /**
+         * 生成 ECC 密钥对 (secp256r1 / NIST P-256)
+         */
+        fun generateECCKeyPair(): KeyPair {
+            // 确保安装了 BouncyCastle 提供者
+            Security.removeProvider("BC")
+            Security.addProvider(BouncyCastleProvider())
+
+            val keyPairGenerator = KeyPairGenerator.getInstance("ECDSA", "BC")
+            val ecSpec = ECGenParameterSpec("secp256r1")
+            keyPairGenerator.initialize(ecSpec, SecureRandom())
+            return keyPairGenerator.generateKeyPair()
+        }
+
+        /**
+         * 使用私钥对数据（如 UID）进行签名
+         * @param privateKey ECC 私钥
+         * @param data 要签名的数据 (如 NTAG424 UID)
+         * @return 签名后的字节数组
+         */
+        fun signData(privateKey: PrivateKey, data: ByteArray): ByteArray {
+            val signature = Signature.getInstance("SHA256withECDSA", "BC")
+            signature.initSign(privateKey)
+            signature.update(data)
+            return signature.sign()
+        }
+
+        /**
+         * 使用公钥验证签名
+         * @param publicKey ECC 公钥
+         * @param data 原始数据 (如 NTAG424 UID)
+         * @param signatureBytes 签名数据
+         * @return 验证是否通过
+         */
+        fun verifySignature(publicKey: PublicKey, data: ByteArray, signatureBytes: ByteArray): Boolean {
+            val signature = Signature.getInstance("SHA256withECDSA", "BC")
+            signature.initVerify(publicKey)
+            signature.update(data)
+            return signature.verify(signatureBytes)
+        }
+
+        /**
+         * 测试函数：演示生成密钥、签名及验证的完整流程
+         */
+        fun testECCSignatureWithUid(uidHex: String = "0464171A282290"): Boolean {
+            try {
+                val uid = hexStringToByteArray(uidHex)
+
+                // 1. 生成密钥对
+                val keyPair = generateECCKeyPair()
+                val privateKey = keyPair.private
+                val publicKey = keyPair.public
+                println("Public Key: ${bytesToHexNpeUpperCaseBlank(publicKey.encoded)}")
+                println("Private Key: ${bytesToHexNpeUpperCaseBlank(privateKey.encoded)}")
+                // 2. 签名
+                val signature = signData(privateKey, uid)
+                println("UID: $uidHex")
+                println("Signature: ${bytesToHex(signature)}")
+
+                // 3. 验证
+                val isValid = verifySignature(publicKey, uid, signature)
+                println("Signature Verification Result: $isValid")
+                return isValid
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            return false
+        }
         // this checks if a String sequence is a valid hext string
         fun isHexNumeric(hexStr: String): Boolean {
             if (hexStr.isEmpty() ||
