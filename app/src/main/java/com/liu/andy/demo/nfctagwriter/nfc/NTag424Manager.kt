@@ -6,8 +6,6 @@ import android.nfc.Tag
 import android.nfc.tech.IsoDep
 import android.nfc.tech.NfcA
 import android.util.Log
-import android.widget.Toast
-import com.liu.andy.demo.nfctagwriter.MainActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.bplearning.ntag424.DnaCommunicator
@@ -24,7 +22,6 @@ import net.bplearning.ntag424.sdm.SDMSettings
 import net.bplearning.ntag424.util.ByteUtil
 import net.bplearning.ntag424.util.ThrowableFunction
 import java.io.IOException
-import java.nio.charset.StandardCharsets
 import java.util.function.Consumer
 
 /**

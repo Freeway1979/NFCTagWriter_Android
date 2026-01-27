@@ -1,12 +1,13 @@
 package com.liu.andy.demo.nfctagwriter.nfc
 
 import android.os.Build
-import androidx.compose.ui.text.toUpperCase
-import org.bouncycastle.crypto.digests.MD5Digest
+import org.bouncycastle.asn1.ASN1Integer
+import org.bouncycastle.asn1.ASN1Sequence
 import org.bouncycastle.jcajce.provider.digest.MD5
 import java.security.Signature
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.lang.reflect.Array
+import java.math.BigInteger
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
@@ -40,11 +41,22 @@ class NTagUtils {
             }
         }
 
-        // f6cfb225-d69b-4fbb-9eda-624b0b20516e
-        fun generateKey0Pass(bLicense: String): String {
+        // 根据uid生成默认的key pass Key:（0-5）
+        fun generateDefaultKeyPass(uid: String, key: Int): String {
+            val source = "${uid}_key${key}"
+            return generateKeyPass(source)
+        }
+
+        fun generateKeyPass(secret: String): String {
             val md5 = MD5.Digest()
-            val bytes = md5.digest(bLicense.uppercase(Locale.US).toByteArray(StandardCharsets.US_ASCII))
+            val bytes = md5.digest(secret.uppercase(Locale.US).toByteArray(StandardCharsets.US_ASCII))
             return bytesToHexNpeUpperCase(bytes)
+        }
+
+        // f6cfb225-d69b-4fbb-9eda-624b0b20516e
+        // 根据 Box License ID 生成 Master Key0 密码
+        fun generateMasterKey0Pass(bLicense: String): String {
+            return generateKeyPass(bLicense)
         }
 
         /**
@@ -100,7 +112,7 @@ class NTagUtils {
          * 使用私钥对数据（如 UID）进行签名
          * @param privateKey ECC 私钥
          * @param data 要签名的数据 (如 NTAG424 UID)
-         * @return 签名后的字节数组
+         * @return 签名后的字节数组(70/71/72字节)
          */
         fun signData(privateKey: PrivateKey, data: ByteArray): ByteArray {
             val signature = Signature.getInstance("SHA256withECDSA", "BC")
@@ -108,7 +120,60 @@ class NTagUtils {
             signature.update(data)
             return signature.sign()
         }
+        /**
+         * 将 ECDSA DER 签名补齐至固定 72 字节
+         * @param derSignature 原始签名字节数组 (通常 70-72 字节)
+         * @return 长度固定为 72 的字节数组
+         */
+        fun padSignatureTo72Bytes(derSignature: ByteArray): ByteArray {
+            val targetLength = 72
 
+            // 1. 安全检查：如果签名超过 72 字节（理论上 P-256 不会发生）
+            if (derSignature.size > targetLength) {
+                throw IllegalArgumentException("签名长度(${derSignature.size})超过预设的72字节")
+            }
+
+            // 2. 如果正好是 72 字节，直接返回副本
+            if (derSignature.size == targetLength) {
+                return derSignature.copyOf()
+            }
+
+            // 3. 创建新的 72 字节数组（Java/Kotlin 默认初始化为 0x00）
+            val padded = ByteArray(targetLength)
+
+            // 4. 将原始签名拷贝到起始位置
+            System.arraycopy(derSignature, 0, padded, 0, derSignature.size)
+
+            return padded
+        }
+        /**
+         * 根据 ASN.1/DER 格式（0x30 + Length + Data）截取有效数据
+         * 自动去除尾部补足的字节
+         */
+        fun unpadByAsn1Length(data: ByteArray): ByteArray {
+            // 安全检查：至少需要 2 个字节（Header + Length）
+            if (data.size < 2) return data
+
+            // 校验第一个字节是否为 0x30
+            if (data[0] != 0x30.toByte()) {
+                // 如果不是 0x30，可能不是预期的格式，可以根据业务需求抛出异常或返回原数据
+                return data
+            }
+
+            // 第二个字节是数据的长度
+            // 注意：Java/Kotlin 的 Byte 是有符号的，0x80 及以上会变成负数，需要 & 0xFF 转换为无符号整数
+            val dataLength = data[1].toInt() and 0xFF
+
+            // 总长度 = 头部(2字节) + 数据内容长度
+            val totalLength = 2 + dataLength
+
+            // 如果原始数组比声明的长度长，说明有补足字节，进行截取
+            return if (data.size > totalLength) {
+                data.copyOfRange(0, totalLength)
+            } else {
+                data
+            }
+        }
         /**
          * 使用公钥验证签名
          * @param publicKey ECC 公钥
@@ -121,6 +186,39 @@ class NTagUtils {
             signature.initVerify(publicKey)
             signature.update(data)
             return signature.verify(signatureBytes)
+        }
+
+        fun derToRaw(derSignature: ByteArray): ByteArray {
+            // 1. 解析 ASN.1 DER 结构
+            val seq = ASN1Sequence.getInstance(derSignature)
+            val r = ASN1Integer.getInstance(seq.getObjectAt(0)).value
+            val s = ASN1Integer.getInstance(seq.getObjectAt(1)).value
+
+            val raw = ByteArray(64)
+
+            // 2. 将 BigInteger 转换为 32 字节的数组
+            // 注意：BigInteger.toByteArray() 可能会因为符号位多出一个 0x00，或者长度不足 32
+            val rBytes = extractFixedBytes(r, 32)
+            val sBytes = extractFixedBytes(s, 32)
+
+            System.arraycopy(rBytes, 0, raw, 0, 32)
+            System.arraycopy(sBytes, 0, raw, 32, 32)
+
+            return raw
+        }
+
+        private fun extractFixedBytes(value: BigInteger, length: Int = 32): ByteArray {
+            val result = ByteArray(length)
+            val bytes = value.toByteArray()
+
+            // 移除 BigInteger 可能存在的符号填充位 (0x00)
+            val start = if (bytes[0].toInt() == 0 && bytes.size > 1) 1 else 0
+            val count = bytes.size - start
+
+            // 如果 count > length，说明该曲线不是 P-256，需要调整长度
+            // 这里将数据拷贝至结果数组的末尾（右对齐），前面自动补零
+            System.arraycopy(bytes, start, result, length - count, count)
+            return result
         }
 
         /**

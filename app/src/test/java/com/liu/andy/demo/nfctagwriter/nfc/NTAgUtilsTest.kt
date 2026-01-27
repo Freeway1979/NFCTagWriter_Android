@@ -1,6 +1,5 @@
 package com.liu.andy.demo.nfctagwriter.nfc
 
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -9,8 +8,26 @@ class NTAgUtilsTest {
     @Test
     fun testGenerateKey0Pass() {
         val boxLicenseId = "f6cfb225-d69b-4fbb-9eda-624b0b20516e"
-        val key0Pass = NTagUtils.generateKey0Pass(boxLicenseId)
+        val key0Pass = NTagUtils.generateMasterKey0Pass(boxLicenseId)
         assertTrue(key0Pass == "4EBC6FCF836695687EBFA56CCC049271")
+    }
+
+    @Test
+    fun testGenerateDefaultPass() {
+        val uid = "0464171A282290"
+        val key0pass = NTagUtils.generateDefaultKeyPass(uid, 0)
+        val key1pass = NTagUtils.generateDefaultKeyPass(uid, 1)
+        val key2pass = NTagUtils.generateDefaultKeyPass(uid, 2)
+        val key3pass = NTagUtils.generateDefaultKeyPass(uid, 3)
+        val key4pass = NTagUtils.generateDefaultKeyPass(uid, 4)
+        val key5pass = NTagUtils.generateDefaultKeyPass(uid, 5)
+        print("$key0pass $key1pass $key2pass $key3pass $key4pass $key5pass")
+        assertTrue(key0pass == "E84ED2DA7103AB27972F4FEB6D2A1959")
+        assertTrue(key1pass == "EF683A400DB0AF9B8A0F4FDF2DE3DE71")
+        assertTrue(key2pass== "A6806DC7BA49B5C0321FDB3A1A13B18B")
+        assertTrue(key3pass == "CCE9AABF868371BCC02C9DF13D2C1CC0")
+        assertTrue(key4pass == "D8483FEFF73493A431031114BAA96B22")
+        assertTrue(key5pass == "7E48BDCB88E5CE84A5A00E765EA16837")
     }
 
     @Test
@@ -36,6 +53,14 @@ class NTAgUtilsTest {
             val signature = NTagUtils.signData(privateKey, uid)
             val signatureHex = NTagUtils.bytesToHex(signature)
             println("Signature: $signatureHex")
+            val paddedSignData = NTagUtils.padSignatureTo72Bytes(signature)
+            val paddedSignDataHex = NTagUtils.bytesToHex(paddedSignData)
+            println("paddedSignData: $paddedSignDataHex")
+
+            // 验证的时候先删除尾部补足的字节.
+            val unpaddedSignedData = NTagUtils.unpadByAsn1Length(paddedSignData)
+            val unpaddedSignedDataHex =  NTagUtils.bytesToHex(unpaddedSignedData)
+            println("unpaddedSignedDataHex: $unpaddedSignedDataHex")
 
             // 验证
             val isValid = NTagUtils.verifySignature(publicKey, uid, signature)
