@@ -36,9 +36,11 @@ class NTagUtils {
 
     companion object {
         init {
-            if (Security.getProvider("BC") == null) {
-                Security.addProvider(BouncyCastleProvider())
-            }
+            // Android ships a stripped-down BC provider that lacks many algorithms.
+            // Remove it and register the full BouncyCastle so that SHA256withECDSA,
+            // EC KeyFactory, etc. are all available.
+            Security.removeProvider("BC")
+            Security.insertProviderAt(BouncyCastleProvider(), 1)
         }
 
         // 根据uid生成默认的key pass Key:（0-5）
@@ -63,13 +65,9 @@ class NTagUtils {
          * 将 Hex 字符串转换为 ECC 公钥 (X.509 格式)
          */
         fun loadPublicKeyFromHex(hex: String): PublicKey {
-            // 确保 BC Provider 已注册
-            if (Security.getProvider("BC") == null) {
-                Security.addProvider(BouncyCastleProvider())
-            }
             val keyBytes = hexStringToByteArray(hex)
             val spec = X509EncodedKeySpec(keyBytes)
-            val kf = KeyFactory.getInstance("ECDSA", "BC")
+            val kf = KeyFactory.getInstance("EC", "BC")
             return kf.generatePublic(spec)
         }
 
@@ -77,13 +75,9 @@ class NTagUtils {
          * 将 Hex 字符串转换为 ECC 私钥 (PKCS#8 格式)
          */
         fun loadPrivateKeyFromHex(hex: String): PrivateKey {
-            // 确保 BC Provider 已注册
-            if (Security.getProvider("BC") == null) {
-                Security.addProvider(BouncyCastleProvider())
-            }
             val keyBytes = hexStringToByteArray(hex)
             val spec = PKCS8EncodedKeySpec(keyBytes)
-            val kf = KeyFactory.getInstance("ECDSA", "BC")
+            val kf = KeyFactory.getInstance("EC", "BC")
             return kf.generatePrivate(spec)
         }
         /**
@@ -98,10 +92,6 @@ class NTagUtils {
          * 生成 ECC 密钥对 (secp256r1 / NIST P-256)
          */
         fun generateECCKeyPair(): KeyPair {
-            // 确保安装了 BouncyCastle 提供者
-            Security.removeProvider("BC")
-            Security.addProvider(BouncyCastleProvider())
-
             val keyPairGenerator = KeyPairGenerator.getInstance("ECDSA", "BC")
             val ecSpec = ECGenParameterSpec("secp256r1")
             keyPairGenerator.initialize(ecSpec, SecureRandom())

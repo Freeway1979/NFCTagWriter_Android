@@ -893,6 +893,119 @@ class NTag424Manager {
         }
     }
 
+    /**
+     * Run the full NTAG424 validation flow in a single NFC connection.
+     *
+     * Steps:
+     * 0. Get UID from tag and generate Key0-Key4 with generateDefaultKeyPass
+     * 1. Verify Key 0 by authenticating
+     * 2. Verify Key 3 by authenticating
+     * 3. Read 72 bytes from File 03 (signed data) with Key 3
+     * 4. Unpad signature with unpadByAsn1Length, then verify with public key
+     *
+     * @param tag The NFC tag
+     * @param onStepStarted Called when a step begins (stepIndex)
+     * @param onStepCompleted Called when a step finishes (stepIndex, success, detail)
+     * @return Result<Boolean> true if all steps pass, false if any step fails
+     */
+    suspend fun runValidationFlow(
+        tag: Tag,
+        onStepStarted: (stepIndex: Int) -> Unit,
+        onStepCompleted: (stepIndex: Int, success: Boolean, detail: String) -> Unit
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val transceiver = getTransceiver(tag)
+            try {
+                val communicator = DnaCommunicator()
+                communicator.setTransceiver { bytesToSend ->
+                    transceiver(bytesToSend)
+                }
+
+                // Select the DF file (required for NTAG424)
+                IsoSelectFile.run(
+                    communicator,
+                    IsoSelectFile.SELECT_MODE_BY_FILE_IDENTIFIER,
+                    DF_FILE_ID
+                )
+
+                // === Step 0: Generate Keys from UID ===
+                onStepStarted(0)
+                val tagUid = tag.id
+                val uidHex = byteArrayToHexString(tagUid)
+                val keys = (0..4).map { keyIndex ->
+                    NTagUtils.generateDefaultKeyPass(uidHex, keyIndex)
+                }
+                val keysDetail = buildString {
+                    append("UID: $uidHex\n")
+                    keys.forEachIndexed { i, k ->
+                        append("Key$i: $k")
+                        if (i < keys.size - 1) append("\n")
+                    }
+                }
+                onStepCompleted(0, true, keysDetail)
+
+                // === Step 1: Verify Key 0 ===
+                onStepStarted(1)
+                val key0Bytes = hexStringToByteArray(keys[0])
+                val key0Auth = AESEncryptionMode.authenticateEV2(communicator, 0, key0Bytes)
+                if (!key0Auth) {
+                    onStepCompleted(1, false, "Key 0 authentication failed")
+                    return@withContext Result.success(false)
+                }
+                onStepCompleted(1, true, "Key 0 authenticated successfully")
+
+                // Get the real card UID (requires Key 0 auth session)
+                val realUidBytes = GetCardUid.run(communicator)
+                val realUidHex = byteArrayToHexString(realUidBytes)
+
+                // === Step 2: Verify Key 3 ===
+                onStepStarted(2)
+                val key3Bytes = hexStringToByteArray(keys[3])
+                val key3Auth = AESEncryptionMode.authenticateEV2(communicator, 3, key3Bytes)
+                if (!key3Auth) {
+                    onStepCompleted(2, false, "Key 3 authentication failed")
+                    return@withContext Result.success(false)
+                }
+                onStepCompleted(2, true, "Key 3 authenticated successfully")
+
+                // === Step 3: Read 72 bytes from File 03 ===
+                onStepStarted(3)
+                val readData = ReadData.run(communicator, SIGNATURE_FILE_NUMBER, 0, 72)
+                val readDetail = buildString {
+                    append("Read ${readData.size} bytes from File 03\n")
+                    append(byteArrayToHexString(readData).chunked(32).joinToString("\n"))
+                }
+                onStepCompleted(3, true, readDetail)
+
+                // === Step 4: Verify Signature ===
+                // Unpad the 72-byte data using ASN.1/DER length, then verify with public key
+                onStepStarted(4)
+                val unpaddedSignature = NTagUtils.unpadByAsn1Length(readData)
+                val publicKey = NTagUtils.loadPublicKeyFromHex(PUBLIC_KEY_HEX)
+                val isValid = NTagUtils.verifySignature(publicKey, realUidBytes, unpaddedSignature)
+                val verifyDetail = buildString {
+                    append("Card UID: $realUidHex\n")
+                    append("Padded signature: ${readData.size} bytes\n")
+                    append("Unpadded signature: ${unpaddedSignature.size} bytes\n")
+                    if (isValid) {
+                        append("Signature verification: PASSED")
+                    } else {
+                        append("Signature verification: FAILED")
+                    }
+                }
+                onStepCompleted(4, isValid, verifyDetail)
+
+                Result.success(isValid)
+
+            } finally {
+                closeTag(tag)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Validation flow error", e)
+            Result.failure(e)
+        }
+    }
+
     // Make file permission/SDM settings easier to see in the logs
     fun debugStringForFileSettings(fs: FileSettings): String {
         val sb = StringBuilder()

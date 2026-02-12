@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -60,6 +61,8 @@ import com.liu.andy.demo.nfctagwriter.ui.ntag424.NTag424Screen
 import com.liu.andy.demo.nfctagwriter.ui.ntag424.NTag424ViewModel
 import com.liu.andy.demo.nfctagwriter.ui.settings.SettingsScreen
 import com.liu.andy.demo.nfctagwriter.ui.theme.NFCTagWriterTheme
+import com.liu.andy.demo.nfctagwriter.ui.validation.ValidationFlowScreen
+import com.liu.andy.demo.nfctagwriter.ui.validation.ValidationFlowViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -195,6 +198,14 @@ class MainActivity : ComponentActivity() {
                     // Check if there's an active action - if so, skip processing
                     if (NTag424ActionHandler.currentAction != null) {
                         Log.d("MainActivity", "Skipping tag processing - active action: ${NTag424ActionHandler.currentAction}")
+                        return
+                    }
+
+                    // Skip background NFC processing on ValidationFlow screen
+                    // (just store the tag and let the validation flow handle it)
+                    val currentRoute = navController?.currentDestination?.route
+                    if (currentRoute == Screen.ValidationFlow.route) {
+                        Log.d("MainActivity", "On ValidationFlow screen - skipping background tag processing")
                         return
                     }
                     
@@ -353,6 +364,7 @@ fun MainScreen(onNavControllerReady: (androidx.navigation.NavController) -> Unit
             NavigationBar {
                 val items = listOf(
                     Screen.NTag424,
+                    Screen.ValidationFlow,
                     Screen.NTag21X,
                     Screen.Settings
                 )
@@ -362,6 +374,7 @@ fun MainScreen(onNavControllerReady: (androidx.navigation.NavController) -> Unit
                             Icon(
                                 imageVector = when (screen) {
                                     is Screen.NTag424 -> Icons.Filled.Refresh
+                                    is Screen.ValidationFlow -> Icons.Filled.Security
                                     is Screen.NTag21X -> Icons.Filled.Slideshow
                                     is Screen.Settings -> Icons.Filled.Settings
                                     else -> Icons.Filled.Settings
@@ -403,6 +416,19 @@ fun MainScreen(onNavControllerReady: (androidx.navigation.NavController) -> Unit
                     }
                 }
                 NTag424Screen(navController = navController, viewModel = viewModel)
+            }
+            composable(Screen.ValidationFlow.route) {
+                val viewModel: ValidationFlowViewModel = viewModel()
+                // Use the state value so LaunchedEffect can track changes
+                val currentTag by NfcTagHolder.currentTagState
+                
+                // Update tag when screen is displayed or tag changes
+                LaunchedEffect(currentTag) {
+                    currentTag?.let { tag ->
+                        viewModel.setCurrentTag(tag)
+                    }
+                }
+                ValidationFlowScreen(navController = navController, viewModel = viewModel)
             }
             composable(Screen.NTag21X.route) {
                 val viewModel: NTag21XViewModel = viewModel()
