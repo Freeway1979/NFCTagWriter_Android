@@ -46,10 +46,17 @@ class NTag424Manager {
         
         // CC file number (0x01 for NTAG424 DNA)
         private const val CC_FILE_NUMBER = 0x01
+
+        // Signature file number (0x03)
+        private const val SIGNATURE_FILE_NUMBER = 0x03
+
+        // ECC Keys for signature
+        private const val PRIVATE_KEY_HEX = "308193020100301306072A8648CE3D020106082A8648CE3D03010704793077020101042060211B0892A704FC584854586F23079C3E9538882F383FE8DCFC4298737E52D8A00A06082A8648CE3D030107A14403420004A802CDC3DE42CFA61970BD84B80D68506F67FB1AF6AEE4912BF13C38AE17F49E24AAD6EBBD4F43D8B7F4976229865CFC253FCFFD9B1D99383DCEAEAC6D3A4A36"
+        private const val PUBLIC_KEY_HEX = "3059301306072A8648CE3D020106082A8648CE3D03010703420004A802CDC3DE42CFA61970BD84B80D68506F67FB1AF6AEE4912BF13C38AE17F49E24AAD6EBBD4F43D8B7F4976229865CFC253FCFFD9B1D99383DCEAEAC6D3A4A36"
         
         // Chunk size for writing (128 bytes for tearing protection per datasheet)
         private const val WRITE_CHUNK_SIZE = 128
-        // https://medium.com/@androidcrypto/demystify-the-secure-dynamic-message-with-ntag-424-dna-nfc-tags-android-java-part-2-1f8878faa928
+        // https://medium.com/@androidcopper/demystify-the-secure-dynamic-message-with-ntag-424-dna-nfc-tags-android-java-part-2-1f8878faa928
     }
 
     /**
@@ -220,6 +227,7 @@ class NTag424Manager {
     /**
      * Configure file access settings with authentication
      * Sets the NDEF file to require authentication for write operations, allow read without auth
+     * Also configures File 03 to require Key 03 for Read and Write.
      */
     suspend fun configureFileAccess(tag: Tag, passwordHex: String,
                                     supportSDM: Boolean = true): Result<String> = withContext(Dispatchers.IO) {
@@ -311,6 +319,17 @@ class NTag424Manager {
                     "New Ndef Settings: " + debugStringForFileSettings(ndeffs)
                 )
                 ChangeFileSettings.run(communicator, Ntag424.NDEF_FILE_NUMBER, ndeffs)
+
+                // --- Configure File 03 (Signature File) to require Key 03 for Read/Write ---
+                val file3Settings = GetFileSettings.run(communicator, SIGNATURE_FILE_NUMBER)
+                file3Settings.readPerm = ACCESS_KEY3
+                file3Settings.writePerm = ACCESS_KEY3
+                file3Settings.readWritePerm = ACCESS_KEY3
+                file3Settings.changePerm = ACCESS_KEY0 // Keep change permission with Master key
+                ChangeFileSettings.run(communicator, SIGNATURE_FILE_NUMBER, file3Settings)
+                Log.d(TAG, "File 03 permissions updated: Read/Write with Key 03")
+                // --------------------------------------------------------------------------
+
                 val savedSettings = GetFileSettings.run(communicator, Ntag424.NDEF_FILE_NUMBER)
                 Log.d(
                     TAG,
@@ -322,7 +341,7 @@ class NTag424Manager {
             // We are done
             iso.close()
             Log.d(TAG, "Disconnected from tag")
-            Result.success("NDEF File Settings configured successfully")
+            Result.success("File Access Settings configured successfully")
         } catch (e: IOException) {
             Log.d(TAG, "error communicating", e)
             Result.failure(e)
@@ -362,10 +381,6 @@ class NTag424Manager {
         // The MAC key usually has the diversification information setup.
         val key3 = KeyInfo()
         key3.diversifyKeys = false
-//        key3.systemIdentifier =
-//            "testing".toByteArray(StandardCharsets.UTF_8) // systemIdentifier is usually a hex-encoded string based on the name of your intended use.
-//        key3.version =
-//            1 // Since it is not a factory key (it is *based* on a factory key, but underwent diversification), need to set to a version number other than 0.
         key3.key = Ntag424.FACTORY_KEY
 
         // No standard usage
@@ -608,6 +623,109 @@ class NTag424Manager {
                 closeTag(tag)
             }
             
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Write signature data to File 03
+     * Signs the current UID with the private key and writes to File 03 offset 0
+     */
+    suspend fun writeSignDataToFile03(tag: Tag, passwordHex: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val transceiver = getTransceiver(tag)
+            try {
+                val communicator = DnaCommunicator()
+                communicator.setTransceiver { bytesToSend ->
+                    transceiver(bytesToSend)
+                }
+
+                // Select the DF file
+                IsoSelectFile.run(
+                    communicator,
+                    IsoSelectFile.SELECT_MODE_BY_FILE_IDENTIFIER,
+                    DF_FILE_ID
+                )
+
+                // Authenticate with the password
+                val keyBytes = hexStringToByteArray(passwordHex)
+                if (!AESEncryptionMode.authenticateEV2(communicator, 0, keyBytes)) {
+                    return@withContext Result.failure(
+                        IOException("Failed to authenticate with provided password")
+                    )
+                }
+
+                // 1. Get UID
+                val uidBytes = GetCardUid.run(communicator)
+
+                // 2. Generate Signature
+                val privateKey = NTagUtils.loadPrivateKeyFromHex(PRIVATE_KEY_HEX)
+                val signature = NTagUtils.signData(privateKey, uidBytes)
+
+                // 3. Pad to 72 bytes
+                val paddedSignature = NTagUtils.padSignatureTo72Bytes(signature)
+
+                // 4. Write to File 03 offset 0
+                WriteData.run(communicator, SIGNATURE_FILE_NUMBER, paddedSignature)
+
+                Result.success("Signature (72 bytes) written to File 03 successfully")
+
+            } finally {
+                closeTag(tag)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Read signature from File 03 and verify it
+     * Reads 72 bytes from File 03 offset 0, unpads, and verifies using the public key and current UID
+     */
+    suspend fun readSignDataFromFile03AndVerify(tag: Tag, passwordHex: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val transceiver = getTransceiver(tag)
+            try {
+                val communicator = DnaCommunicator()
+                communicator.setTransceiver { bytesToSend ->
+                    transceiver(bytesToSend)
+                }
+
+                // Select the DF file
+                IsoSelectFile.run(
+                    communicator,
+                    IsoSelectFile.SELECT_MODE_BY_FILE_IDENTIFIER,
+                    DF_FILE_ID
+                )
+
+                // Authenticate with the password
+                val keyBytes = hexStringToByteArray(passwordHex)
+                // Use Key 3 for authentication as configured in configureFileAccess
+                if (!AESEncryptionMode.authenticateEV2(communicator, 3, keyBytes)) {
+                    return@withContext Result.failure(
+                        IOException("Failed to authenticate with Key 03")
+                    )
+                }
+
+                // 1. Get UID for verification
+                val uidBytes = GetCardUid.run(communicator)
+
+                // 2. Read 72 bytes from File 03 offset 0
+                val paddedSignature = ReadData.run(communicator, SIGNATURE_FILE_NUMBER, 0, 72)
+
+                // 3. Unpad by ASN.1 length
+                val signature = NTagUtils.unpadByAsn1Length(paddedSignature)
+
+                // 4. Verify Signature
+                val publicKey = NTagUtils.loadPublicKeyFromHex(PUBLIC_KEY_HEX)
+                val isValid = NTagUtils.verifySignature(publicKey, uidBytes, signature)
+
+                Result.success(isValid)
+
+            } finally {
+                closeTag(tag)
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
